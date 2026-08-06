@@ -30,7 +30,7 @@ classifiers = [
 ]
 
 [project.urls]
-Home-page = "https://github.com/officialpycasbin/django-orm-adapter"
+Home-page = "https://github.com/apache/casbin-python-django-orm-adapter"
 
 [build-system]
 requires = ["setuptools"]
