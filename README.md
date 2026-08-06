@@ -1,7 +1,7 @@
 # Django ORM Adapter for PyCasbin
 
-[![build](https://github.com/officialpycasbin/django-orm-adapter/actions/workflows/build.yml/badge.svg)](https://github.com/officialpycasbin/django-orm-adapter/actions/workflows/build.yml)
-[![Coverage Status](https://coveralls.io/repos/github/officialpycasbin/django-orm-adapter/badge.svg)](https://coveralls.io/github/officialpycasbin/django-orm-adapter)
+[![build](https://github.com/apache/casbin-python-django-orm-adapter/actions/workflows/build.yml/badge.svg)](https://github.com/apache/casbin-python-django-orm-adapter/actions/workflows/build.yml)
+[![Coverage Status](https://coveralls.io/repos/github/apache/casbin-python-django-orm-adapter/badge.svg)](https://coveralls.io/github/apache/casbin-python-django-orm-adapter)
 [![Version](https://img.shields.io/pypi/v/casbin-django-orm-adapter.svg)](https://pypi.org/project/casbin-django-orm-adapter/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/casbin-django-orm-adapter.svg)](https://pypi.org/project/casbin-django-orm-adapter/)
 [![Pyversions](https://img.shields.io/pypi/pyversions/casbin-django-orm-adapter.svg)](https://pypi.org/project/casbin-django-orm-adapter/)
