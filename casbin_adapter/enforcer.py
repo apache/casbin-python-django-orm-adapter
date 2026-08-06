@@ -43,9 +43,9 @@ class ProxyEnforcer(Enforcer):
                 self.set_role_manager(role_manager)
 
     def __getattribute__(self, name):
-        safe_methods = ["__init__", "_load", "_initialized"]
+        safe_methods = ["__init__", "__class__", "_load", "_initialized", "db_alias"]
         if not super().__getattribute__("_initialized") and name not in safe_methods:
-            initialize_enforcer(self.db_alias)
+            initialize_enforcer(super().__getattribute__("db_alias"))
             if not super().__getattribute__("_initialized"):
                 raise Exception(
                     (
