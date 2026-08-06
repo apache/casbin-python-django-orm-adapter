@@ -1,0 +1,131 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: Release
+
+# Releases are NOT automatic. A release manager pushes a git tag manually:
+#   * v1.7.0-rc1  -> publishes a GitHub *pre-release* only (artifact for the Apache vote)
+#   * v1.7.0      -> publishes a GitHub *release* and pushes the package to PyPI
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Manual Tag Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve Tag
+        id: tag
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+
+          if [[ "$VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-[Rr][Cc]([0-9]+)$ ]]; then
+            BASE_VERSION="${BASH_REMATCH[1]}"
+            RC_NUMBER="${BASH_REMATCH[2]}"
+            IS_RC=true
+          elif [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            BASE_VERSION="$VERSION"
+            RC_NUMBER=""
+            IS_RC=false
+          else
+            echo "::error::Tag '$TAG' is not a supported release tag (expected vX.Y.Z or vX.Y.Z-rcN)."
+            exit 1
+          fi
+
+          # The source release must describe its own version, so pyproject.toml
+          # has to be bumped and committed before the tag is pushed.
+          PROJECT_VERSION="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          if [[ "$PROJECT_VERSION" != "$BASE_VERSION" ]]; then
+            echo "::error::pyproject.toml version ($PROJECT_VERSION) does not match tag version ($BASE_VERSION). Bump pyproject.toml before tagging."
+            exit 1
+          fi
+
+          # Apache source release artifact naming. The RC number is intentionally
+          # NOT part of the file name, so the bits that get voted on are byte
+          # identical to the bits published for the final release.
+          ARTIFACT="apache-casbin-django-orm-adapter-${BASE_VERSION}-incubating-src.tar.gz"
+
+          {
+            echo "tag=$TAG"
+            echo "base_version=$BASE_VERSION"
+            echo "rc_number=$RC_NUMBER"
+            echo "is_rc=$IS_RC"
+            echo "artifact=$ARTIFACT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build Apache Source Package
+        run: |
+          set -euo pipefail
+          ARTIFACT="${{ steps.tag.outputs.artifact }}"
+          # The tarball unpacks into a single top level directory named after the
+          # artifact, and contains sources only - no binaries, no VCS metadata.
+          git archive --format=tar.gz \
+            --prefix="${ARTIFACT%.tar.gz}/" \
+            -o "$ARTIFACT" HEAD
+          sha512sum "$ARTIFACT" > "$ARTIFACT.sha512"
+
+      - name: Publish GitHub Pre-Release
+        if: steps.tag.outputs.is_rc == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ARTIFACT="${{ steps.tag.outputs.artifact }}"
+          gh release create "${{ steps.tag.outputs.tag }}" \
+            --title "v${{ steps.tag.outputs.base_version }}-rc${{ steps.tag.outputs.rc_number }}" \
+            --prerelease \
+            --notes "Release candidate ${{ steps.tag.outputs.rc_number }} for version ${{ steps.tag.outputs.base_version }}. This is not an official release; it is the source package for the Apache vote. Release managers should download \`$ARTIFACT\`, sign it locally, and use it for the vote." \
+            "$ARTIFACT" "$ARTIFACT.sha512"
+
+      - name: Publish GitHub Release
+        if: steps.tag.outputs.is_rc == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ARTIFACT="${{ steps.tag.outputs.artifact }}"
+          gh release create "${{ steps.tag.outputs.tag }}" \
+            --title "v${{ steps.tag.outputs.base_version }}" \
+            --notes "Version ${{ steps.tag.outputs.base_version }}. The official source package is \`$ARTIFACT\`." \
+            "$ARTIFACT" "$ARTIFACT.sha512"
+
+      - name: Publish to PyPI
+        if: steps.tag.outputs.is_rc == 'false'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade build twine
+          python -m build
+          python -m twine upload dist/*
